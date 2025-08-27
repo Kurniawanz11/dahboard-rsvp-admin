@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="id">
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>RSVP Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body{font-family:system-ui,sans-serif;background:#f6f7fb;margin:0;padding:24px}
+  h1{margin-bottom:8px}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 18px}
+  input,select,button{padding:10px;border:1px solid #ddd;border-radius:8px}
+  button{cursor:pointer;font-weight:600}
+  button.primary{background:#2c3e50;color:#fff;border:0}
+  .card{background:#fff;border-radius:14px;box-shadow:0 4px 12px rgba(0,0,0,.08);padding:16px;margin-bottom:20px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px 10px;border-bottom:1px solid #eee;font-size:14px;text-align:left}
+  th{background:#2c3e50;color:#fff;position:sticky;top:0}
+  tbody tr:hover{background:#f8f9fc}
+</style>
+<h1>RSVP Dashboard</h1>
+
+<div class="bar">
+  <input id="q" placeholder="Cari nama..."/>
+  <select id="filter">
+    <option value="">Semua status</option>
+    <option>Hadir</option>
+    <option>Tidak Hadir</option>
+    <option>-</option>
+  </select>
+  <button id="refresh" class="primary">Refresh</button>
+  <button id="export">Export CSV</button>
+  <input type="file" id="importFile"/>
+</div>
+
+<div class="card">
+  <h3>Tambah Data Baru</h3>
+  <div class="bar">
+    <input id="addNama" placeholder="Nama"/>
+    <select id="addHub">
+      <option>Teman</option>
+      <option>Saudara</option>
+      <option>Tamu</option>
+    </select>
+    <select id="addStat">
+      <option>-</option>
+      <option>Hadir</option>
+      <option>Tidak Hadir</option>
+    </select>
+    <input id="addJml" type="number" placeholder="Jumlah"/>
+    <button id="addBtn" class="primary">Tambah</button>
+  </div>
+</div>
+
+<div class="card">
+  <div id="count">Memuat data…</div>
+  <div style="overflow:auto;max-height:60vh">
+    <table id="tbl">
+      <thead><tr>
+        <th>Timestamp</th><th>Nama</th><th>Hubungan</th><th>Status</th><th>Jumlah</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Statistik Kehadiran</h3>
+  <canvas id="chartStatus" height="100"></canvas>
+</div>
+
+<script>
+const API = "https://script.google.com/macros/s/AKfycbwXhvlZeNxkVJYljpZXLZd91sdXueBKY0DmT37dVSOmg796Xb6zT6IfcMcxLj1EMjg5/exec"; 
+let raw = [];
+
+async function load(){
+  document.getElementById('count').textContent = "Memuat data…";
+  const res = await fetch(API+"?action=list");
+  const json = await res.json();
+  raw = json.data || [];
+  render();
+}
+function render(){
+  const q = document.getElementById('q').value.toLowerCase();
+  const f = document.getElementById('filter').value;
+  const rows = raw.filter(r=>{
+    const okQ=!q||(r.nama||'').toLowerCase().includes(q);
+    const okF=!f||(r.kehadiran||'-')===f;
+    return okQ && okF;
+  });
+  document.getElementById('count').textContent = `Total: ${rows.length} data`;
+  document.querySelector('#tbl tbody').innerHTML = rows.map(r=>`
+    <tr>
+      <td>${r.timestamp||''}</td>
+      <td>${r.nama||''}</td>
+      <td>${r.hubungan||''}</td>
+      <td>${r.kehadiran||''}</td>
+      <td>${r.jumlah||''}</td>
+    </tr>`).join('');
+  drawChart(rows);
+}
+
+// Export
+document.getElementById('export').onclick=()=>{
+  const rows=[['Timestamp','Nama','Hubungan','Status','Jumlah']]
+    .concat(raw.map(r=>[r.timestamp,r.nama,r.hubungan,r.kehadiran,r.jumlah]));
+  const csv=rows.map(r=>r.map(x=>`"${(x??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='rsvp.csv';a.click();URL.revokeObjectURL(a.href);
+};
+
+// Import CSV
+document.getElementById('importFile').onchange=async e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const text=await file.text();
+  await fetch(API,{
+    method:"POST",
+    body:new URLSearchParams({action:'import',csv:text})
+  });
+  load();
+};
+
+// Tambah Data
+document.getElementById('addBtn').onclick=async()=>{
+  const nama=document.getElementById('addNama').value;
+  const hub=document.getElementById('addHub').value;
+  const stat=document.getElementById('addStat').value;
+  const jml=document.getElementById('addJml').value;
+  if(!nama) return alert("Nama wajib diisi");
+  await fetch(API,{
+    method:"POST",
+    body:new URLSearchParams({
+      action:'add',nama:nama,hubungan:hub,kehadiran:stat,jumlah:jml
+    })
+  });
+  document.getElementById('addNama').value="";
+  document.getElementById('addJml').value="";
+  load();
+};
+
+// Chart Kehadiran
+let chart;
+function drawChart(rows){
+  const counts={Hadir:0,"Tidak Hadir":0,"-":0};
+  rows.forEach(r=>counts[r.kehadiran||'-']++);
+  const ctx=document.getElementById('chartStatus').getContext('2d');
+  if(chart) chart.destroy();
+  chart=new Chart(ctx,{
+    type:'pie',
+    data:{
+      labels:Object.keys(counts),
+      datasets:[{data:Object.values(counts),backgroundColor:["#2ecc71","#e74c3c","#95a5a6"]}]
+    }
+  });
+}
+
+document.getElementById('refresh').onclick=load;
+document.getElementById('q').oninput=render;
+document.getElementById('filter').onchange=render;
+load();
+</script>
+</html>
