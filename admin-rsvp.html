@@ -83,7 +83,7 @@ function render(){
   const q = document.getElementById('q').value.toLowerCase();
   const f = document.getElementById('filter').value;
   const rows = raw.filter(r=>{
-    const okQ=!q||(r.nama||'').toLowerCase().includes(q);
+        const nama = (r.fullName || (r.firstName+" "+r.lastName) || "").toLowerCase();
     const okF=!f||(r.kehadiran||'-')===f;
     return okQ && okF;
   });
@@ -91,7 +91,7 @@ function render(){
   document.querySelector('#tbl tbody').innerHTML = rows.map(r=>`
     <tr>
       <td>${r.timestamp||''}</td>
-      <td>${r.nama||''}</td>
+            <td>${r.fullName || (r.firstName+" "+r.lastName)||''}</td>
       <td>${r.hubungan||''}</td>
       <td>${r.kehadiran||''}</td>
       <td>${r.jumlah||''}</td>
@@ -102,7 +102,7 @@ function render(){
 // Export
 document.getElementById('export').onclick=()=>{
   const rows=[['Timestamp','Nama','Hubungan','Status','Jumlah']]
-    .concat(raw.map(r=>[r.timestamp,r.nama,r.hubungan,r.kehadiran,r.jumlah]));
+    .concat(raw.map(r=>[r.timestamp,r.fullName || (r.firstName+" "+r.lastName),r.hubungan,r.kehadiran,r.jumlah]));
   const csv=rows.map(r=>r.map(x=>`"${(x??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
