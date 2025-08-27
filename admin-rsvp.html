@@ -3,18 +3,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>RSVP Dashboard</title>
-
-<!-- Chart.js + DataLabels -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-
-<!-- JSZip & FileSaver (untuk ZIP export) -->
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-
-<!-- SheetJS (untuk Excel export) -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
 <style>
   body{font-family:system-ui,sans-serif;background:#f6f7fb;margin:0;padding:24px}
   h1{margin-bottom:8px}
@@ -22,13 +11,13 @@
   input,select,button{padding:10px;border:1px solid #ddd;border-radius:8px}
   button{cursor:pointer;font-weight:600}
   button.primary{background:#2c3e50;color:#fff;border:0}
+  button.danger{background:#e74c3c;color:#fff;border:0}
   .card{background:#fff;border-radius:14px;box-shadow:0 4px 12px rgba(0,0,0,.08);padding:16px;margin-bottom:20px}
   table{width:100%;border-collapse:collapse}
   th,td{padding:8px 10px;border-bottom:1px solid #eee;font-size:14px;text-align:left}
   th{background:#2c3e50;color:#fff;position:sticky;top:0}
   tbody tr:hover{background:#f8f9fc}
 </style>
-
 <h1>RSVP Dashboard</h1>
 
 <div class="bar">
@@ -44,27 +33,10 @@
   <input type="file" id="importFile"/>
 </div>
 
-<!-- Rekap -->
-<div class="card">
-  <h3>Rekap Kehadiran</h3>
-  <table style="width:auto">
-    <tbody>
-      <tr><td><b>Total Tamu</b></td><td id="rekapTotal">0</td></tr>
-      <tr><td><b>Hadir</b></td><td id="rekapHadir">0</td></tr>
-      <tr><td><b>Tidak Hadir</b></td><td id="rekapTidak">0</td></tr>
-      <tr><td><b>Belum Konfirmasi</b></td><td id="rekapBelum">0</td></tr>
-    </tbody>
-  </table>
-  <button id="downloadRekap" style="margin-top:10px" class="primary">Download Rekap (CSV)</button>
-  <button id="downloadAll" style="margin-top:10px" class="primary">Download Semua Laporan (ZIP)</button>
-  <button id="downloadExcel" style="margin-top:10px" class="primary">Download Semua Laporan (Excel)</button>
-</div>
-
-<!-- Tambah Data -->
 <div class="card">
   <h3>Tambah Data Baru</h3>
   <div class="bar">
-    <input id="addNama" placeholder="Nama Lengkap"/>
+    <input id="addNama" placeholder="Nama"/>
     <select id="addHub">
       <option>Teman</option>
       <option>Saudara</option>
@@ -80,34 +52,25 @@
   </div>
 </div>
 
-<!-- Data Tabel -->
 <div class="card">
   <div id="count">Memuat data…</div>
   <div style="overflow:auto;max-height:60vh">
     <table id="tbl">
       <thead><tr>
-        <th>Timestamp</th><th>Nama</th><th>Hubungan</th><th>Status</th><th>Jumlah</th>
+        <th>Timestamp</th><th>Nama</th><th>Hubungan</th><th>Status</th><th>Jumlah</th><th>Aksi</th>
       </tr></thead>
       <tbody></tbody>
     </table>
   </div>
 </div>
 
-<!-- Charts -->
 <div class="card">
   <h3>Statistik Kehadiran</h3>
   <canvas id="chartStatus" height="100"></canvas>
-  <button id="downloadStatus" style="margin-top:10px" class="primary">Download Chart Kehadiran</button>
-</div>
-
-<div class="card">
-  <h3>Statistik Hubungan Tamu</h3>
-  <canvas id="chartHubungan" height="120"></canvas>
-  <button id="downloadHubungan" style="margin-top:10px" class="primary">Download Chart Hubungan</button>
 </div>
 
 <script>
-const API = "https://script.google.com/macros/s/AKfycbwXhvlZeNxkVJYljpZXLZd91sdXueBKY0DmT37dVSOmg796Xb6zT6IfcMcxLj1EMjg5/exec"; // ganti dengan URL Google Apps Script kamu
+const API = "https://script.google.com/macros/s/AKfycbwXhvlZeNxkVJYljpZXLZd91sdXueBKY0DmT37dVSOmg796Xb6zT6IfcMcxLj1EMjg5/exec"; 
 let raw = [];
 
 async function load(){
@@ -122,46 +85,30 @@ function render(){
   const q = document.getElementById('q').value.toLowerCase();
   const f = document.getElementById('filter').value;
   const rows = raw.filter(r=>{
-    const nama = (r.fullName || (r.firstName+" "+r.lastName) || "").toLowerCase();
-    const okQ=!q||nama.includes(q);
+    const okQ=!q||(r.fullName||'').toLowerCase().includes(q);
     const okF=!f||(r.kehadiran||'-')===f;
     return okQ && okF;
   });
-
-  // update tabel
   document.getElementById('count').textContent = `Total: ${rows.length} data`;
-  document.querySelector('#tbl tbody').innerHTML = rows.map(r=>`
+  document.querySelector('#tbl tbody').innerHTML = rows.map((r,i)=>`
     <tr>
       <td>${r.timestamp||''}</td>
-      <td>${r.fullName || (r.firstName+" "+r.lastName)||''}</td>
+      <td>${r.fullName||''}</td>
       <td>${r.hubungan||''}</td>
       <td>${r.kehadiran||''}</td>
       <td>${r.jumlah||''}</td>
+      <td>
+        <button onclick="editRow(${i})">Edit</button>
+        <button class="danger" onclick="deleteRow(${i})">Hapus</button>
+      </td>
     </tr>`).join('');
-
-  // update rekap
-  let total = rows.length;
-  let hadir = rows.filter(r=>r.kehadiran==="Hadir").length;
-  let tidak = rows.filter(r=>r.kehadiran==="Tidak Hadir").length;
-  let belum = rows.filter(r=>(!r.kehadiran || r.kehadiran==='-')).length;
-  document.getElementById("rekapTotal").textContent = total;
-  document.getElementById("rekapHadir").textContent = hadir;
-  document.getElementById("rekapTidak").textContent = tidak;
-  document.getElementById("rekapBelum").textContent = belum;
-
   drawChart(rows);
 }
 
-// Export CSV data tamu
+// Export CSV
 document.getElementById('export').onclick=()=>{
   const rows=[['Timestamp','Nama','Hubungan','Status','Jumlah']]
-    .concat(raw.map(r=>[
-      r.timestamp,
-      r.fullName || (r.firstName+" "+r.lastName),
-      r.hubungan,
-      r.kehadiran,
-      r.jumlah
-    ]));
+    .concat(raw.map(r=>[r.timestamp,r.fullName,r.hubungan,r.kehadiran,r.jumlah]));
   const csv=rows.map(r=>r.map(x=>`"${(x??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
@@ -172,7 +119,11 @@ document.getElementById('export').onclick=()=>{
 document.getElementById('importFile').onchange=async e=>{
   const file=e.target.files[0]; if(!file) return;
   const text=await file.text();
-  await fetch(API,{method:"POST", body:new URLSearchParams({action:'import',csv:text})});
+  await fetch(API,{
+    method:"POST",
+    body:new URLSearchParams({action:'import',csv:text})
+  });
+  e.target.value=""; 
   load();
 };
 
@@ -185,178 +136,62 @@ document.getElementById('addBtn').onclick=async()=>{
   if(!nama) return alert("Nama wajib diisi");
   await fetch(API,{
     method:"POST",
-    body:new URLSearchParams({action:'add',nama:nama,hubungan:hub,kehadiran:stat,jumlah:jml})
+    body:new URLSearchParams({
+      action:'add',nama:nama,hubungan:hub,kehadiran:stat,jumlah:jml
+    })
   });
   document.getElementById('addNama').value="";
   document.getElementById('addJml').value="";
   load();
 };
 
-// Rekap CSV
-document.getElementById("downloadRekap").onclick = ()=>{
-  const rows = [
-    ["Kategori","Jumlah"],
-    ["Total Tamu", document.getElementById("rekapTotal").textContent],
-    ["Hadir", document.getElementById("rekapHadir").textContent],
-    ["Tidak Hadir", document.getElementById("rekapTidak").textContent],
-    ["Belum Konfirmasi", document.getElementById("rekapBelum").textContent]
-  ];
-  const csv = rows.map(r=>r.join(",")).join("\n");
-  const blob = new Blob([csv],{type:'text/csv'});
-  saveAs(blob,"rekap_rsvp.csv");
-};
-
-// Download Semua (ZIP)
-document.getElementById("downloadAll").onclick = async ()=>{
-  const zip = new JSZip();
-
-  // Rekap
-  const rows = [
-    ["Kategori","Jumlah"],
-    ["Total Tamu", document.getElementById("rekapTotal").textContent],
-    ["Hadir", document.getElementById("rekapHadir").textContent],
-    ["Tidak Hadir", document.getElementById("rekapTidak").textContent],
-    ["Belum Konfirmasi", document.getElementById("rekapBelum").textContent]
-  ];
-  const csvRekap = rows.map(r=>r.join(",")).join("\n");
-  zip.file("rekap_rsvp.csv", csvRekap);
-
-  // Data tamu
-  const header = ["Timestamp","Nama Lengkap","Hubungan","Kehadiran","Jumlah"];
-  const dataRows = raw.map(r=>[
-    r.timestamp||"",
-    r.fullName||(r.firstName+" "+r.lastName)||"",
-    r.hubungan||"",
-    r.kehadiran||"",
-    r.jumlah||""
-  ]);
-  const csvData = [header].concat(dataRows).map(r=>r.join(",")).join("\n");
-  zip.file("data_tamu.csv", csvData);
-
-  // Charts
-  if(chartStatus){
-    zip.file("chart_kehadiran.png", chartStatus.toBase64Image().split(",")[1], {base64:true});
-  }
-  if(chartHub){
-    zip.file("chart_hubungan.png", chartHub.toBase64Image().split(",")[1], {base64:true});
-  }
-
-  const content = await zip.generateAsync({type:"blob"});
-  saveAs(content,"laporan_rsvp.zip");
-};
-
-// Download Excel
-document.getElementById("downloadExcel").onclick = ()=>{
-  const wb = XLSX.utils.book_new();
-
-  // Sheet Rekap
-  const wsRekap = XLSX.utils.aoa_to_sheet([
-    ["Kategori","Jumlah"],
-    ["Total Tamu", document.getElementById("rekapTotal").textContent],
-    ["Hadir", document.getElementById("rekapHadir").textContent],
-    ["Tidak Hadir", document.getElementById("rekapTidak").textContent],
-    ["Belum Konfirmasi", document.getElementById("rekapBelum").textContent]
-  ]);
-  XLSX.utils.book_append_sheet(wb, wsRekap, "Rekap");
-
-  // Sheet Data Tamu
-  const header = ["Timestamp","Nama Lengkap","Hubungan","Kehadiran","Jumlah"];
-  const dataRows = raw.map(r=>[
-    r.timestamp||"",
-    r.fullName||(r.firstName+" "+r.lastName)||"",
-    r.hubungan||"",
-    r.kehadiran||"",
-    r.jumlah||""
-  ]);
-  const wsData = XLSX.utils.aoa_to_sheet([header,...dataRows]);
-  XLSX.utils.book_append_sheet(wb, wsData, "Data Tamu");
-
-  // Sheet Statistik
-  const countsKehadiran={Hadir:0,"Tidak Hadir":0,"-":0};
-  raw.forEach(r=>countsKehadiran[r.kehadiran||"-"]++);
-  const totalTamu=raw.length||1;
-  const statKehadiran=[
-    ["Status","Jumlah","Persentase"],
-    ["Hadir",countsKehadiran.Hadir,(countsKehadiran.Hadir/totalTamu*100).toFixed(1)+"%"],
-    ["Tidak Hadir",countsKehadiran["Tidak Hadir"],(countsKehadiran["Tidak Hadir"]/totalTamu*100).toFixed(1)+"%"],
-    ["Belum Konfirmasi",countsKehadiran["-"],(countsKehadiran["-"]/totalTamu*100).toFixed(1)+"%"]
-  ];
-  const countsHub={Teman:0,Saudara:0,Tamu:0,Lainnya:0};
-  raw.forEach(r=>{
-    let h=(r.hubungan||"").toLowerCase();
-    if(h==="teman") countsHub.Teman++;
-    else if(h==="saudara") countsHub.Saudara++;
-    else if(h==="tamu") countsHub.Tamu++;
-    else countsHub.Lainnya++;
+// Edit Data
+async function editRow(i){
+  const row = raw[i];
+  const stat = prompt("Status baru (Hadir/Tidak Hadir/-):", row.kehadiran||'-');
+  if(stat===null) return;
+  const jml = prompt("Jumlah baru:", row.jumlah||'');
+  if(jml===null) return;
+  await fetch(API,{
+    method:"POST",
+    body:new URLSearchParams({
+      name:row.fullName,
+      kehadiran:stat,
+      jumlah:jml
+    })
   });
-  const statHubungan=[
-    ["Hubungan","Jumlah","Persentase"],
-    ["Teman",countsHub.Teman,(countsHub.Teman/totalTamu*100).toFixed(1)+"%"],
-    ["Saudara",countsHub.Saudara,(countsHub.Saudara/totalTamu*100).toFixed(1)+"%"],
-    ["Tamu",countsHub.Tamu,(countsHub.Tamu/totalTamu*100).toFixed(1)+"%"],
-    ["Lainnya",countsHub.Lainnya,(countsHub.Lainnya/totalTamu*100).toFixed(1)+"%"]
-  ];
-  const wsStat=XLSX.utils.aoa_to_sheet([
-    ["Statistik Kehadiran"],[],...statKehadiran,[],["Statistik Hubungan"],[],...statHubungan
-  ]);
-  XLSX.utils.book_append_sheet(wb, wsStat, "Statistik");
+  load();
+}
 
-  XLSX.writeFile(wb,"laporan_rsvp.xlsx");
-};
+// Hapus Data
+async function deleteRow(i){
+  const row = raw[i];
+  if(!confirm(`Hapus tamu "${row.fullName}" ?`)) return;
+  await fetch(API,{
+    method:"POST",
+    body:new URLSearchParams({
+      action:'delete',
+      name:row.fullName
+    })
+  });
+  load();
+}
 
-// Charts
-let chartStatus, chartHub;
+// Chart Kehadiran
+let chart;
 function drawChart(rows){
-  // Chart Kehadiran
   const counts={Hadir:0,"Tidak Hadir":0,"-":0};
   rows.forEach(r=>counts[r.kehadiran||'-']++);
   const ctx=document.getElementById('chartStatus').getContext('2d');
-  if(chartStatus) chartStatus.destroy();
-  chartStatus=new Chart(ctx,{
+  if(chart) chart.destroy();
+  chart=new Chart(ctx,{
     type:'pie',
-    data:{labels:Object.keys(counts),datasets:[{data:Object.values(counts),backgroundColor:["#2ecc71","#e74c3c","#95a5a6"]}]},
-    options:{
-      plugins:{legend:{position:'bottom'},datalabels:{formatter:(val,ctx)=>{let sum=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);return sum?`${val} (${(val/sum*100).toFixed(1)}%)`:"";},color:"#fff",font:{weight:'bold'}}}
-    },
-    plugins:[ChartDataLabels]
-  });
-
-  // Chart Hubungan
-  const hubCounts={Teman:0,Saudara:0,Tamu:0,Lainnya:0};
-  rows.forEach(r=>{
-    let h=(r.hubungan||"").toLowerCase();
-    if(h==="teman") hubCounts.Teman++;
-    else if(h==="saudara") hubCounts.Saudara++;
-    else if(h==="tamu") hubCounts.Tamu++;
-    else hubCounts.Lainnya++;
-  });
-  const ctx2=document.getElementById('chartHubungan').getContext('2d');
-  if(chartHub) chartHub.destroy();
-  chartHub=new Chart(ctx2,{
-    type:'bar',
-    data:{labels:Object.keys(hubCounts),datasets:[{label:'Jumlah Tamu',data:Object.values(hubCounts),backgroundColor:["#3498db","#9b59b6","#f1c40f","#7f8c8d"]}]},
-    options:{
-      responsive:true,
-      plugins:{legend:{display:false},datalabels:{formatter:(val,ctx)=>{let sum=ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);return sum?`${val} (${(val/sum*100).toFixed(1)}%)`:"";},color:"#000",anchor:'end',align:'top',font:{weight:'bold'}}},
-      scales:{y:{beginAtZero:true}}
-    },
-    plugins:[ChartDataLabels]
+    data:{
+      labels:Object.keys(counts),
+      datasets:[{data:Object.values(counts),backgroundColor:["#2ecc71","#e74c3c","#95a5a6"]}]
+    }
   });
 }
-
-// Download Chart PNG
-document.getElementById("downloadStatus").onclick=()=>{
-  const link=document.createElement("a");
-  link.download="chart_kehadiran.png";
-  link.href=chartStatus.toBase64Image();
-  link.click();
-};
-document.getElementById("downloadHubungan").onclick=()=>{
-  const link=document.createElement("a");
-  link.download="chart_hubungan.png";
-  link.href=chartHub.toBase64Image();
-  link.click();
-};
 
 document.getElementById('refresh').onclick=load;
 document.getElementById('q').oninput=render;
