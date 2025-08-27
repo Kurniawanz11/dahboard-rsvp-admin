@@ -1,175 +1,246 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>RSVP Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-  body{font-family:system-ui,sans-serif;background:#f4f8fc;margin:0;padding:20px;color:#2c3e50}
-  h1{margin-bottom:12px;color:#1e3a8a}
-  .bar{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 18px}
-  input,select,button{padding:10px;border:1px solid #d1d5db;border-radius:10px;font-size:14px}
-  button{cursor:pointer;font-weight:600;transition:all .2s}
-  button.primary{background:#1e3a8a;color:#fff;border:0}
-  button.primary:hover{background:#334155}
-  .card{background:#fff;border-radius:16px;box-shadow:0 6px 14px rgba(0,0,0,.08);padding:18px;margin-bottom:20px}
-  table{width:100%;border-collapse:collapse;font-size:14px}
-  th,td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left}
-  th{background:#1e3a8a;color:#fff;position:sticky;top:0}
-  tbody tr:nth-child(even){background:#f9fafb}
-  tbody tr:hover{background:#e0f2fe}
-  @media(max-width:600px){
-    .bar{flex-direction:column}
-    table, thead, tbody, th, td, tr {display:block}
-    th{position:relative}
-    td{border:none;padding:6px 0}
-  }
-</style>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard RSVP Tamu</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f7f9; color: #333; line-height: 1.6; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1, h3 { text-align: center; color: #0056b3; }
+        .stats-container { display: flex; justify-content: space-around; flex-wrap: wrap; margin-bottom: 20px; }
+        .card { background: #e9f5ff; border: 1px solid #cce7ff; border-radius: 8px; padding: 15px; text-align: center; min-width: 150px; margin: 10px; }
+        .card p { font-size: 2em; margin: 0; font-weight: bold; color: #007bff; }
+        .chart-container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .controls-container { text-align: center; margin-bottom: 20px; }
+        #searchInput { padding: 8px; width: 300px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 5px; }
+        button:hover { background-color: #0056b3; }
+        #addDataForm { text-align: center; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+        #dataForm input, #dataForm select { margin: 5px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .hidden { display: none; }
+        .table-container { overflow-x: auto; }
+        #dataTable { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 1px 5px rgba(0,0,0,0.1); }
+        #dataTable th, #dataTable td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        #dataTable th { background-color: #f2f2f2; font-weight: bold; color: #555; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard RSVP Tamu</h1>
+        <div class="stats-container">
+            <div class="card">
+                <h3>Total Tamu</h3>
+                <p id="totalTamu">0</p>
+            </div>
+            <div class="card">
+                <h3>Tamu Hadir</h3>
+                <p id="tamuHadir">0</p>
+            </div>
+            <div class="card">
+                <h3>Tamu Tidak Hadir</h3>
+                <p id="tamuTidakHadir">0</p>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h3>Persentase Kehadiran</h3>
+            <canvas id="kehadiranChart"></canvas>
+        </div>
+        
+        <div class="controls-container">
+            <input type="text" id="searchInput" placeholder="Cari nama atau hubungan...">
+            <button onclick="clearSearch()">Bersihkan</button>
+            <button onclick="showAddForm()">Tambah Data</button>
+        </div>
+        
+        <div id="addDataForm" class="hidden">
+            <form id="dataForm">
+                <h3>Tambah Data Tamu Baru</h3>
+                <input type="text" id="inputHubungan" placeholder="Hubungan" required>
+                <input type="text" id="inputGelar" placeholder="Gelar">
+                <input type="text" id="inputFirstName" placeholder="Nama Depan" required>
+                <input type="text" id="inputLastName" placeholder="Nama Belakang" required>
+                <select id="inputKehadiran" required>
+                    <option value="Hadir">Hadir</option>
+                    <option value="Tidak Hadir">Tidak Hadir</option>
+                </select>
+                <input type="number" id="inputJumlah" placeholder="Jumlah" required>
+                <button type="submit">Simpan Data</button>
+                <button type="button" onclick="hideAddForm()">Batal</button>
+            </form>
+        </div>
+        
+        <div class="table-container">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Hubungan</th>
+                        <th>Gelar</th>
+                        <th>Nama Lengkap</th>
+                        <th>Kehadiran</th>
+                        <th>Jumlah</th>
+                    </tr>
+                </thead>
+                <tbody id="dataBody"></tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbywtmbe9eWN5L0VRsn8eabAWkZfmip30qpAMVlEOxw7WwG_JAG7B8HAQFf8lhvFOCX4/exec';
+        let guestsData = [];
+        let chartInstance;
 
-<h1>RSVP Dashboard</h1>
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchData();
+            document.getElementById('searchInput').addEventListener('keyup', filterData);
+            document.getElementById('dataForm').addEventListener('submit', addData);
+        });
 
-<div class="bar">
-  <input id="q" placeholder="Cari nama..." aria-label="Pencarian Nama"/>
-  <select id="filter" aria-label="Filter Kehadiran">
-    <option value="">Semua status</option>
-    <option>Hadir</option>
-    <option>Tidak Hadir</option>
-    <option>-</option>
-  </select>
-  <button id="refresh" class="primary">Refresh</button>
-  <button id="export">Export CSV</button>
-  <label>
-    <input type="file" id="importFile" style="display:none"/>
-    <button>Import CSV</button>
-  </label>
-</div>
+        async function fetchData() {
+            try {
+                const response = await fetch(API_URL);
+                const result = await response.json();
+                if (result.status === 'ok') {
+                    guestsData = result.data;
+                    renderTable(guestsData);
+                    updateStats(guestsData);
+                    updateChart(guestsData);
+                } else {
+                    console.error('Error fetching data:', result.message);
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
 
-<div class="card">
-  <h3>Tambah Data Baru</h3>
-  <div class="bar">
-    <input id="addNama" placeholder="Nama"/>
-    <select id="addHub">
-      <option>Teman</option>
-      <option>Saudara</option>
-      <option>Tamu</option>
-    </select>
-    <select id="addStat">
-      <option>-</option>
-      <option>Hadir</option>
-      <option>Tidak Hadir</option>
-    </select>
-    <input id="addJml" type="number" placeholder="Jumlah"/>
-    <button id="addBtn" class="primary">Tambah</button>
-  </div>
-</div>
+        function renderTable(data) {
+            const tableBody = document.getElementById('dataBody');
+            tableBody.innerHTML = '';
+            data.forEach(guest => {
+                const row = `
+                    <tr>
+                        <td>${guest.timestamp}</td>
+                        <td>${guest.hubungan}</td>
+                        <td>${guest.gelar}</td>
+                        <td>${guest.fullName}</td>
+                        <td>${guest.kehadiran}</td>
+                        <td>${guest.jumlah}</td>
+                    </tr>
+                `;
+                tableBody.innerHTML += row;
+            });
+        }
 
-<div class="card">
-  <div id="count">Memuat data…</div>
-  <div style="overflow:auto;max-height:60vh">
-    <table id="tbl">
-      <thead><tr>
-        <th>Timestamp</th><th>Nama</th><th>Hubungan</th><th>Status</th><th>Jumlah</th>
-      </tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-</div>
+        function updateStats(data) {
+            const totalTamu = data.reduce((sum, guest) => sum + (guest.jumlah ? parseInt(guest.jumlah) : 0), 0);
+            const tamuHadir = data.filter(g => g.kehadiran === 'Hadir').reduce((sum, guest) => sum + (guest.jumlah ? parseInt(guest.jumlah) : 0), 0);
+            const tamuTidakHadir = totalTamu - tamuHadir;
 
-<div class="card">
-  <h3>Statistik Kehadiran</h3>
-  <canvas id="chartStatus" height="100"></canvas>
-</div>
+            document.getElementById('totalTamu').innerText = totalTamu;
+            document.getElementById('tamuHadir').innerText = tamuHadir;
+            document.getElementById('tamuTidakHadir').innerText = tamuTidakHadir;
+        }
 
-<script>
-const API = "https://script.google.com/macros/s/AKfycbywtmbe9eWN5L0VRsn8eabAWkZfmip30qpAMVlEOxw7WwG_JAG7B8HAQFf8lhvFOCX4/exec"; 
-let raw = [];
+        function updateChart(data) {
+            const totalTamu = data.reduce((sum, guest) => sum + (guest.jumlah ? parseInt(guest.jumlah) : 0), 0);
+            const tamuHadir = data.filter(g => g.kehadiran === 'Hadir').reduce((sum, guest) => sum + (guest.jumlah ? parseInt(guest.jumlah) : 0), 0);
+            const tamuTidakHadir = totalTamu - tamuHadir;
 
-async function load(){
-  document.getElementById('count').textContent = "Memuat data…";
-  try {
-    const res = await fetch(API+"?action=list");
-    const json = await res.json();
-    raw = json.data || [];
-    render();
-  } catch(e){
-    document.getElementById('count').textContent = "Gagal memuat data";
-    alert("Terjadi error saat memuat data.");
-  }
-}
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
 
-function render(){
-  const q = document.getElementById('q').value.toLowerCase();
-  const f = document.getElementById('filter').value;
-  const rows = raw.filter(r=>{
-    const okQ=!q||(r.nama||'').toLowerCase().includes(q);
-    const okF=!f||(r.kehadiran||'-')===f;
-    return okQ && okF;
-  });
-  document.getElementById('count').textContent = `Total: ${rows.length} data`;
-  document.querySelector('#tbl tbody').innerHTML = rows.map(r=>`
-    <tr>
-      <td>${r.timestamp||''}</td>
-      <td>${r.nama||''}</td>
-      <td>${r.hubungan||''}</td>
-      <td>${r.kehadiran||''}</td>
-      <td>${r.jumlah||''}</td>
-    </tr>`).join('');
-  drawChart(rows);
-}
+            const ctx = document.getElementById('kehadiranChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Hadir', 'Tidak Hadir'],
+                    datasets: [{
+                        data: [tamuHadir, tamuTidakHadir],
+                        backgroundColor: ['#4CAF50', '#F44336'],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(tooltipItem) {
+                                    const value = tooltipItem.raw;
+                                    const total = tooltipItem.chart.getDatasetMeta(0).total;
+                                    const percentage = total > 0 ? (value / total * 100).toFixed(2) : 0;
+                                    return `${tooltipItem.label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
-// Export
-document.getElementById('export').onclick=()=>{
-  const rows=[['Timestamp','Nama','Hubungan','Status','Jumlah']]
-    .concat(raw.map(r=>[r.timestamp,r.nama,r.hubungan,r.kehadiran,r.jumlah]));
-  const csv=rows.map(r=>r.map(x=>`"${(x??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download='rsvp.csv';a.click();URL.revokeObjectURL(a.href);
-  alert("Data berhasil diexport ke CSV!");
-};
+        function filterData() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const filteredData = guestsData.filter(guest => 
+                (guest.firstName && guest.firstName.toLowerCase().includes(searchTerm)) ||
+                (guest.lastName && guest.lastName.toLowerCase().includes(searchTerm)) ||
+                (guest.fullName && guest.fullName.toLowerCase().includes(searchTerm)) ||
+                (guest.hubungan && guest.hubungan.toLowerCase().includes(searchTerm))
+            );
+            renderTable(filteredData);
+        }
 
-// Import CSV
-document.getElementById('importFile').onchange=async e=>{
-  const file=e.target.files[0]; if(!file) return;
-  const text=await file.text();
-  await fetch(API,{method:"POST",body:new URLSearchParams({action:'import',csv:text})});
-  load();
-};
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            renderTable(guestsData);
+        }
 
-// Tambah Data
-document.getElementById('addBtn').onclick=async()=>{
-  const nama=document.getElementById('addNama').value;
-  const hub=document.getElementById('addHub').value;
-  const stat=document.getElementById('addStat').value;
-  const jml=document.getElementById('addJml').value;
-  if(!nama) return alert("Nama wajib diisi");
-  await fetch(API,{method:"POST",body:new URLSearchParams({
-      action:'add',nama:nama,hubungan:hub,kehadiran:stat,jumlah:jml
-  })});
-  document.getElementById('addNama').value="";
-  document.getElementById('addJml').value="";
-  load();
-};
+        function showAddForm() {
+            document.getElementById('addDataForm').classList.remove('hidden');
+        }
 
-// Chart Kehadiran
-let chart;
-function drawChart(rows){
-  const counts={Hadir:0,"Tidak Hadir":0,"-":0};
-  rows.forEach(r=>counts[r.kehadiran||'-']++);
-  const ctx=document.getElementById('chartStatus').getContext('2d');
-  if(chart) chart.destroy();
-  chart=new Chart(ctx,{
-    type:'pie',
-    data:{
-      labels:Object.keys(counts),
-      datasets:[{data:Object.values(counts),backgroundColor:["#3b82f6","#ef4444","#9ca3af"]}]
-    }
-  });
-}
+        function hideAddForm() {
+            document.getElementById('addDataForm').classList.add('hidden');
+            document.getElementById('dataForm').reset();
+        }
 
-document.getElementById('refresh').onclick=load;
-document.getElementById('q').oninput=render;
-document.getElementById('filter').onchange=render;
-load();
-</script>
+        async function addData(event) {
+            event.preventDefault();
+            
+            const newGuest = {
+                action: 'add',
+                hubungan: document.getElementById('inputHubungan').value,
+                gelar: document.getElementById('inputGelar').value,
+                firstName: document.getElementById('inputFirstName').value,
+                lastName: document.getElementById('inputLastName').value,
+                kehadiran: document.getElementById('inputKehadiran').value,
+                jumlah: parseInt(document.getElementById('inputJumlah').value)
+            };
+            
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(newGuest),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                if (result.status === 'ok') {
+                    alert('Data berhasil ditambahkan!');
+                    hideAddForm();
+                    fetchData();
+                } else {
+                    alert('Gagal menambahkan data: ' + result.message);
+                }
+            } catch (error) {
+                alert('Terjadi kesalahan saat menambahkan data.');
+                console.error('Error adding data:', error);
+            }
+        }
+    </script>
+</body>
 </html>
