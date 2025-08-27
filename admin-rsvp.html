@@ -5,24 +5,32 @@
 <title>RSVP Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-  body{font-family:system-ui,sans-serif;background:#f6f7fb;margin:0;padding:24px}
-  h1{margin-bottom:8px}
+  body{font-family:system-ui,sans-serif;background:#f4f8fc;margin:0;padding:20px;color:#2c3e50}
+  h1{margin-bottom:12px;color:#1e3a8a}
   .bar{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 18px}
-  input,select,button{padding:10px;border:1px solid #ddd;border-radius:8px}
-  button{cursor:pointer;font-weight:600}
-  button.primary{background:#2c3e50;color:#fff;border:0}
-  button.danger{background:#e74c3c;color:#fff;border:0}
-  .card{background:#fff;border-radius:14px;box-shadow:0 4px 12px rgba(0,0,0,.08);padding:16px;margin-bottom:20px}
-  table{width:100%;border-collapse:collapse}
-  th,td{padding:8px 10px;border-bottom:1px solid #eee;font-size:14px;text-align:left}
-  th{background:#2c3e50;color:#fff;position:sticky;top:0}
-  tbody tr:hover{background:#f8f9fc}
+  input,select,button{padding:10px;border:1px solid #d1d5db;border-radius:10px;font-size:14px}
+  button{cursor:pointer;font-weight:600;transition:all .2s}
+  button.primary{background:#1e3a8a;color:#fff;border:0}
+  button.primary:hover{background:#334155}
+  .card{background:#fff;border-radius:16px;box-shadow:0 6px 14px rgba(0,0,0,.08);padding:18px;margin-bottom:20px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left}
+  th{background:#1e3a8a;color:#fff;position:sticky;top:0}
+  tbody tr:nth-child(even){background:#f9fafb}
+  tbody tr:hover{background:#e0f2fe}
+  @media(max-width:600px){
+    .bar{flex-direction:column}
+    table, thead, tbody, th, td, tr {display:block}
+    th{position:relative}
+    td{border:none;padding:6px 0}
+  }
 </style>
+
 <h1>RSVP Dashboard</h1>
 
 <div class="bar">
-  <input id="q" placeholder="Cari nama..."/>
-  <select id="filter">
+  <input id="q" placeholder="Cari nama..." aria-label="Pencarian Nama"/>
+  <select id="filter" aria-label="Filter Kehadiran">
     <option value="">Semua status</option>
     <option>Hadir</option>
     <option>Tidak Hadir</option>
@@ -30,7 +38,10 @@
   </select>
   <button id="refresh" class="primary">Refresh</button>
   <button id="export">Export CSV</button>
-  <input type="file" id="importFile"/>
+  <label>
+    <input type="file" id="importFile" style="display:none"/>
+    <button>Import CSV</button>
+  </label>
 </div>
 
 <div class="card">
@@ -57,7 +68,7 @@
   <div style="overflow:auto;max-height:60vh">
     <table id="tbl">
       <thead><tr>
-        <th>Timestamp</th><th>Nama</th><th>Hubungan</th><th>Status</th><th>Jumlah</th><th>Aksi</th>
+        <th>Timestamp</th><th>Nama</th><th>Hubungan</th><th>Status</th><th>Jumlah</th>
       </tr></thead>
       <tbody></tbody>
     </table>
@@ -75,55 +86,53 @@ let raw = [];
 
 async function load(){
   document.getElementById('count').textContent = "Memuat data…";
-  const res = await fetch(API+"?action=list");
-  const json = await res.json();
-  raw = json.data || [];
-  render();
+  try {
+    const res = await fetch(API+"?action=list");
+    const json = await res.json();
+    raw = json.data || [];
+    render();
+  } catch(e){
+    document.getElementById('count').textContent = "Gagal memuat data";
+    alert("Terjadi error saat memuat data.");
+  }
 }
 
 function render(){
   const q = document.getElementById('q').value.toLowerCase();
   const f = document.getElementById('filter').value;
   const rows = raw.filter(r=>{
-    const okQ=!q||(r.fullName||'').toLowerCase().includes(q);
+    const okQ=!q||(r.nama||'').toLowerCase().includes(q);
     const okF=!f||(r.kehadiran||'-')===f;
     return okQ && okF;
   });
   document.getElementById('count').textContent = `Total: ${rows.length} data`;
-  document.querySelector('#tbl tbody').innerHTML = rows.map((r,i)=>`
+  document.querySelector('#tbl tbody').innerHTML = rows.map(r=>`
     <tr>
       <td>${r.timestamp||''}</td>
-      <td>${r.fullName||''}</td>
+      <td>${r.nama||''}</td>
       <td>${r.hubungan||''}</td>
       <td>${r.kehadiran||''}</td>
       <td>${r.jumlah||''}</td>
-      <td>
-        <button onclick="editRow(${i})">Edit</button>
-        <button class="danger" onclick="deleteRow(${i})">Hapus</button>
-      </td>
     </tr>`).join('');
   drawChart(rows);
 }
 
-// Export CSV
+// Export
 document.getElementById('export').onclick=()=>{
   const rows=[['Timestamp','Nama','Hubungan','Status','Jumlah']]
-    .concat(raw.map(r=>[r.timestamp,r.fullName,r.hubungan,r.kehadiran,r.jumlah]));
+    .concat(raw.map(r=>[r.timestamp,r.nama,r.hubungan,r.kehadiran,r.jumlah]));
   const csv=rows.map(r=>r.map(x=>`"${(x??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='rsvp.csv';a.click();URL.revokeObjectURL(a.href);
+  alert("Data berhasil diexport ke CSV!");
 };
 
 // Import CSV
 document.getElementById('importFile').onchange=async e=>{
   const file=e.target.files[0]; if(!file) return;
   const text=await file.text();
-  await fetch(API,{
-    method:"POST",
-    body:new URLSearchParams({action:'import',csv:text})
-  });
-  e.target.value=""; 
+  await fetch(API,{method:"POST",body:new URLSearchParams({action:'import',csv:text})});
   load();
 };
 
@@ -134,48 +143,13 @@ document.getElementById('addBtn').onclick=async()=>{
   const stat=document.getElementById('addStat').value;
   const jml=document.getElementById('addJml').value;
   if(!nama) return alert("Nama wajib diisi");
-  await fetch(API,{
-    method:"POST",
-    body:new URLSearchParams({
+  await fetch(API,{method:"POST",body:new URLSearchParams({
       action:'add',nama:nama,hubungan:hub,kehadiran:stat,jumlah:jml
-    })
-  });
+  })});
   document.getElementById('addNama').value="";
   document.getElementById('addJml').value="";
   load();
 };
-
-// Edit Data
-async function editRow(i){
-  const row = raw[i];
-  const stat = prompt("Status baru (Hadir/Tidak Hadir/-):", row.kehadiran||'-');
-  if(stat===null) return;
-  const jml = prompt("Jumlah baru:", row.jumlah||'');
-  if(jml===null) return;
-  await fetch(API,{
-    method:"POST",
-    body:new URLSearchParams({
-      name:row.fullName,
-      kehadiran:stat,
-      jumlah:jml
-    })
-  });
-  load();
-}
-
-// Hapus Data
-async function deleteRow(i){
-  const row = raw[i];
-  if(!confirm(`Hapus tamu "${row.fullName}" ?`)) return;
-  await fetch(API,{
-    method:"POST",
-    body:new URLSearchParams({
-      action:'delete',
-      name:row.fullName
-    })
-  });
-  load();
-}
 
 // Chart Kehadiran
 let chart;
@@ -188,7 +162,7 @@ function drawChart(rows){
     type:'pie',
     data:{
       labels:Object.keys(counts),
-      datasets:[{data:Object.values(counts),backgroundColor:["#2ecc71","#e74c3c","#95a5a6"]}]
+      datasets:[{data:Object.values(counts),backgroundColor:["#3b82f6","#ef4444","#9ca3af"]}]
     }
   });
 }
