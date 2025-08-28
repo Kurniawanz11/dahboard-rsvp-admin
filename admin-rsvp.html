@@ -1,170 +1,216 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <title>Admin RSVP Dashboard</title>
-  <style>
-    body {font-family: Arial, sans-serif; padding: 20px; background: #f4f6f9;}
-    h2 {color:#2c3e50;}
-    table {width:100%; border-collapse: collapse; margin-top: 20px;}
-    th, td {border:1px solid #ccc; padding:8px; text-align:left;}
-    th {background:#2c3e50; color:white;}
-    tr:nth-child(even){background:#f9f9f9;}
-    .form-row {margin-bottom:10px;}
-    input, select, button {padding:6px; margin-right:5px;}
-    button {cursor:pointer;}
-  </style>
-</head>
-<body>
-  <h2>Admin RSVP</h2>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>RSVP Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body{font-family:system-ui,sans-serif;background:#f6f7fb;margin:0;padding:24px}
+  h1{margin-bottom:8px}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 18px}
+  input,select,button{padding:10px;border:1px solid #ddd;border-radius:8px}
+  button{cursor:pointer;font-weight:600}
+  button.primary{background:#2c3e50;color:#fff;border:0}
+  .card{background:#fff;border-radius:14px;box-shadow:0 4px 12px rgba(0,0,0,.08);padding:16px;margin-bottom:20px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px 10px;border-bottom:1px solid #eee;font-size:14px;text-align:left}
+  th{background:#2c3e50;color:#fff;position:sticky;top:0}
+  tbody tr:hover{background:#f8f9fc}
+</style>
 
-  <!-- Form Tambah Data -->
-  <div>
-    <div class="form-row">
-      <input id="addNama" placeholder="Nama Lengkap" />
-      <select id="addHub">
-        <option value="Primary">Primary</option>
-        <option value="Guest">Guest</option>
-      </select>
-      <select id="addStat">
-        <option value="Hadir">Hadir</option>
-        <option value="Tidak Hadir">Tidak Hadir</option>
-      </select>
-      <input id="addJml" type="number" placeholder="Jumlah" min="1"/>
-      <button id="addBtn">Tambah</button>
-    </div>
+<h1>RSVP Dashboard</h1>
+
+<div class="bar">
+  <input id="q" placeholder="Cari nama."/>
+  <select id="filter">
+    <option value="">Semua status</option>
+    <option>Hadir</option>
+    <option>Tidak Hadir</option>
+    <option>-</option>
+  </select>
+  <button id="refresh" class="primary">Refresh</button>
+  <button id="export">Export CSV</button>
+  <input type="file" id="importFile"/>
+</div>
+
+<div class="card">
+  <h3>Tambah Data Baru</h3>
+  <div class="bar">
+    <input id="addNama" placeholder="Nama"/>
+    <select id="addHub">
+      <option>Teman</option>
+      <option>Saudara</option>
+      <option>Tamu</option>
+    </select>
+    <select id="addStat">
+      <option>-</option>
+      <option>Hadir</option>
+      <option>Tidak Hadir</option>
+    </select>
+    <input id="addJml" type="number" placeholder="Jumlah"/>
+    <!-- PENTING: type="button" supaya tidak melakukan submit/reload -->
+    <button type="button" id="addBtn" class="primary">Tambah</button>
   </div>
+</div>
 
-  <!-- Tabel Data RSVP -->
-  <table>
-    <thead>
-      <tr>
-        <th>Nama</th>
-        <th>Hubungan</th>
-        <th>Kehadiran</th>
-        <th>Jumlah</th>
-        <th>Aksi</th>
-      </tr>
-    </thead>
-    <tbody id="dataBody"></tbody>
-  </table>
+<div class="card">
+  <div id="count">Memuat data…</div>
+  <div style="overflow:auto;max-height:60vh">
+    <table id="tbl">
+      <thead><tr>
+        <th>Timestamp</th><th>Nama</th><th>Hubungan</th><th>Status</th><th>Jumlah</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Statistik Kehadiran</h3>
+  <canvas id="chartStatus" height="100"></canvas>
+</div>
 
 <script>
-//=== Konfigurasi API Google Apps Script ===
+/* -- GANTI API ini dengan URL deploy script Anda jika beda -- */
 const API = "https://script.google.com/macros/s/AKfycbxMLG7Eihm81qig2_14MFhmYWe6KYH3hpoI8k-G3ejwc3FfCoJnrkgIbqYZGxi7Jow/exec";
+let raw = [];
 
-//=== Load Data dari Sheet ===
+/* load list */
 async function load(){
+  document.getElementById('count').textContent = "Memuat data…";
   try {
     const res = await fetch(API + "?action=list");
-    const data = await res.json();
-    const tbody = document.getElementById('dataBody');
-    tbody.innerHTML = "";
-    (data.data || []).forEach(row=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${row.fullName||''}</td>
-        <td>${row.hubungan||''}</td>
-        <td>${row.kehadiran||''}</td>
-        <td>${row.jumlah||''}</td>
-        <td>
-          <button onclick="editGuest('${row.fullName}')">Edit</button>
-          <button onclick="deleteGuest('${row.fullName}')">Delete</button>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
-  } catch(err){
-    console.error("Load error:", err);
-    alert("Gagal memuat data");
+    const json = await res.json();
+    raw = json.data || [];
+    render();
+  } catch (err) {
+    console.error('Load error:', err);
+    alert('Gagal memuat data. Cek console (F12) Network.');
   }
 }
 
-//=== Tambah Data ===
-document.getElementById('addBtn').onclick = async () => {
+/* render table dan filter */
+function render(){
+  const q = (document.getElementById('q').value||'').toLowerCase();
+  const f = document.getElementById('filter').value;
+  const rows = raw.filter(r=>{
+    const nama = ((r.fullName) || ((r.firstName||'') + " " + (r.lastName||'')) || "").toLowerCase();
+    const okQ = !q || nama.includes(q);
+    const okF = !f || (r.kehadiran||'-')===f;
+    return okQ && okF;
+  });
+  document.getElementById('count').textContent = `Total: ${rows.length} data`;
+  document.querySelector('#tbl tbody').innerHTML = rows.map(r=>`
+    <tr>
+      <td>${r.timestamp||''}</td>
+      <td>${r.fullName || ((r.firstName||'') + " " + (r.lastName||''))||''}</td>
+      <td>${r.hubungan||''}</td>
+      <td>${r.kehadiran||''}</td>
+      <td>${r.jumlah||''}</td>
+    </tr>`).join('');
+  drawChart(rows);
+}
+
+/* export CSV */
+document.getElementById('export').onclick = ()=>{
+  const rows=[['Timestamp','Nama','Hubungan','Status','Jumlah']]
+    .concat(raw.map(r=>[r.timestamp, r.fullName || ((r.firstName||'') + " " + (r.lastName||'')), r.hubungan, r.kehadiran, r.jumlah]));
+  const csv = rows.map(r=>r.map(x=>`"${(x??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'rsvp.csv'; a.click(); URL.revokeObjectURL(a.href);
+};
+
+/* import CSV - kirim sebagai FormData supaya Apps Script mudah baca */
+document.getElementById('importFile').onchange = async e=>{
+  const file = e.target.files[0]; if(!file) return;
+  const text = await file.text();
   try {
-    const nama = (document.getElementById('addNama').value || "").trim();
-    const hub = document.getElementById('addHub').value;
-    const stat = document.getElementById('addStat').value;
-    const jml = document.getElementById('addJml').value;
-
-    if (!nama) return alert("Nama wajib diisi");
-
-    // Pisahkan firstName dan lastName
-    const parts = nama.split(" ");
-    const first = parts[0] || "";
-    const last = parts.slice(1).join(" ");
-
-    const params = new URLSearchParams({
-      action: 'add',
-      fullName: nama,
-      firstName: first,
-      lastName: last,
-      hubungan: hub,
-      kehadiran: stat,
-      jumlah: jml
-    });
-
-    const res = await fetch(API, { method: "POST", body: params });
-    let data = null;
-    try { data = await res.json(); } catch(e){}
-
-    if (res.ok && data && data.status === 'success') {
-      alert('✅ Data berhasil ditambahkan');
-      document.getElementById('addNama').value = "";
-      document.getElementById('addJml').value = "";
-      await load();
-    } else {
-      console.warn("Add response:", data);
-      alert('❌ Gagal menambahkan data');
-    }
-  } catch (err) {
-    console.error('addBtn error', err);
-    alert('❌ Error: ' + err.message);
+    const fd = new FormData();
+    fd.append('action','import');
+    fd.append('csv', text);
+    const res = await fetch(API, { method: 'POST', body: fd, mode:'cors', credentials:'omit' });
+    const json = await res.json();
+    console.log('Import response:', json);
+    load();
+  } catch(err){
+    console.error('Import error:', err);
+    alert('Gagal import. Cek console.');
   }
 };
 
-//=== Edit Data ===
-async function editGuest(nama){
-  const kehadiran = prompt("Masukkan status kehadiran (Hadir/Tidak Hadir):");
-  const jumlah = prompt("Masukkan jumlah tamu:");
+/* === PERBAIKAN: Tambah Data menggunakan FormData (hindari Invalid action) === */
+document.getElementById('addBtn').onclick = async (evt) => {
+  // jika tombol berada dalam form di embed Blogger, preventDefault aman dilakukan
+  try { evt.preventDefault && evt.preventDefault(); } catch(e){}
+  const nama = (document.getElementById('addNama').value||'').trim();
+  const hub  = document.getElementById('addHub').value;
+  const stat = document.getElementById('addStat').value;
+  const jml  = document.getElementById('addJml').value;
+  if (!nama) return alert("Nama wajib diisi");
 
-  if(!kehadiran && !jumlah) return;
+  // make FormData (multipart/form-data) — ini lebih kompatibel dengan Apps Script yang mem-parsing FormData
+  const fd = new FormData();
+  fd.append('action','add');
+  fd.append('nama', nama);           // sesuai yang script GS Anda periksa: data.nama
+  fd.append('hubungan', hub);
+  fd.append('kehadiran', stat);
+  fd.append('jumlah', jml);
 
-  const params = new URLSearchParams({
-    action:'update',
-    name:nama,
-    kehadiran:kehadiran || "",
-    jumlah:jumlah || ""
-  });
-
-  try{
-    const res = await fetch(API, { method:"POST", body: params });
+  try {
+    const res = await fetch(API, { method: 'POST', body: fd, mode:'cors', credentials:'omit' });
     const data = await res.json();
-    if(data.status === "updated" || data.status === "success"){
-      alert("✅ Data berhasil diupdate");
-      await load();
+    console.log('Add response:', data); // buka console untuk debugging
+    if (data.status === 'ok' || data.status === 'success' || data.status === 'saved' || data.status === 'Tersimpan') {
+      alert('Berhasil menambahkan data');
+      document.getElementById('addNama').value = "";
+      document.getElementById('addJml').value = "";
+      load();
     } else {
-      alert("❌ Gagal update");
+      // server mengembalikan error
+      alert('Gagal menambah: ' + (data.message || JSON.stringify(data)));
     }
-  }catch(err){
-    console.error("update error", err);
-    alert("❌ Error update: " + err.message);
+  } catch (err) {
+    console.error('Add error:', err);
+    alert('Error ketika menambah data. Cek console (F12) > Network & Console untuk detail.');
   }
+};
+
+/* chart helper */
+let chart;
+function drawChart(rows){
+  const counts={Hadir:0,"Tidak Hadir":0,"-":0};
+  rows.forEach(r=>counts[r.kehadiran||'-']++);
+  const ctx=document.getElementById('chartStatus').getContext('2d');
+  if(chart) chart.destroy();
+  chart=new Chart(ctx,{
+    type:'pie',
+    data:{
+      labels:Object.keys(counts),
+      datasets:[{data:Object.values(counts)}]
+    }
+  });
 }
 
-//=== Hapus Data ===
-async function deleteGuest(nama){
+  async function deleteGuest(nama){
   if(!confirm("Yakin hapus " + nama + "?")) return;
-  const params = new URLSearchParams({ action:'delete', name:nama });
-  try{
-    const res = await fetch(API, { method:"POST", body: params });
+
+  // Gunakan FormData agar kompatibel dengan Apps Script
+  const fd = new FormData();
+  fd.append("action","delete");
+  fd.append("fullName", nama); // sesuai dengan addGuest yang menyimpan fullName
+  fd.append("nama", nama);     // tambahan fallback, jaga2 jika script backend baca 'nama'
+
+  try {
+    const res = await fetch(API, { method:"POST", body: fd });
     const data = await res.json();
-    if(data.status === "deleted" || data.status === "success"){
+    console.log("Delete response:", data);
+
+    if(data.status === "deleted" || data.status === "success" || data.status === "ok"){
       alert("✅ Data dihapus");
       await load();
     } else {
-      alert("❌ Gagal hapus");
+      alert("❌ Gagal hapus: " + (data.message || JSON.stringify(data)));
     }
   }catch(err){
     console.error("delete error", err);
@@ -172,8 +218,12 @@ async function deleteGuest(nama){
   }
 }
 
-//=== Load pertama kali ===
+/* events */
+document.getElementById('refresh').onclick = load;
+document.getElementById('q').oninput = render;
+document.getElementById('filter').onchange = render;
+
+/* initial load */
 load();
 </script>
-</body>
 </html>
