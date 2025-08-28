@@ -83,15 +83,16 @@ function render(){
   const q = document.getElementById('q').value.toLowerCase();
   const f = document.getElementById('filter').value;
   const rows = raw.filter(r=>{
-        const nama = (r.fullName || (r.firstName+" "+r.lastName) || "").toLowerCase();
-    const okF=!f||(r.kehadiran||'-')===f;
+    const nama = (r.fullName || (r.firstName+" "+r.lastName) || "").toLowerCase();
+    const okQ = !q || nama.includes(q);        <!-- ✅ Tambahan -->
+    const okF = !f || (r.kehadiran||'-')===f;
     return okQ && okF;
   });
   document.getElementById('count').textContent = `Total: ${rows.length} data`;
   document.querySelector('#tbl tbody').innerHTML = rows.map(r=>`
     <tr>
       <td>${r.timestamp||''}</td>
-            <td>${r.fullName || (r.firstName+" "+r.lastName)||''}</td>
+      <td>${r.fullName || (r.firstName+" "+r.lastName)||''}</td>
       <td>${r.hubungan||''}</td>
       <td>${r.kehadiran||''}</td>
       <td>${r.jumlah||''}</td>
