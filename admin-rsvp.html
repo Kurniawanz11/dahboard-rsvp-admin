@@ -122,22 +122,44 @@ document.getElementById('importFile').onchange=async e=>{
 };
 
 // Tambah Data
-document.getElementById('addBtn').onclick=async()=>{
-  const nama=document.getElementById('addNama').value;
-  const hub=document.getElementById('addHub').value;
-  const stat=document.getElementById('addStat').value;
-  const jml=document.getElementById('addJml').value;
-  if(!nama) return alert("Nama wajib diisi");
-  await fetch(API,{
-    method:"POST",
-    body:new URLSearchParams({
-      action:'add',nama:nama,hubungan:hub,kehadiran:stat,jumlah:jml
-    })
-  });
-  document.getElementById('addNama').value="";
-  document.getElementById('addJml').value="";
-  load();
+// Tambah Data (perbaikan)
+document.getElementById('addBtn').onclick = async () => {
+  try {
+    const nama = (document.getElementById('addNama').value || "").trim();
+    const hub = document.getElementById('addHub').value;
+    const stat = document.getElementById('addStat').value;
+    const jml = document.getElementById('addJml').value;
+    if (!nama) return alert("Nama wajib diisi");
+
+    const params = new URLSearchParams({
+      action: 'add',
+      name: nama,         // beberapa backend expect 'name'
+      fullName: nama,     // beberapa expect 'fullName'
+      hubungan: hub,
+      kehadiran: stat,
+      jumlah: jml
+    });
+
+    const res = await fetch(API, { method: "POST", body: params });
+    let data = null;
+    try { data = await res.json(); } catch(e){ /* ignore JSON parse errors */ }
+
+    if (res.ok && (data == null || data.status === 'success' || data.status === 'saved')) {
+      // sukses (jika backend tidak mengembalikan JSON juga kita anggap berhasil bila 200)
+      alert('✅ Data berhasil ditambahkan');
+      document.getElementById('addNama').value = "";
+      document.getElementById('addJml').value = "";
+      await load(); // reload data
+    } else {
+      console.warn('add response', res, data);
+      alert('❌ Gagal menambahkan data. Cek Console / Network.');
+    }
+  } catch (err) {
+    console.error('addBtn error', err);
+    alert('❌ Error saat menambahkan: ' + err.message);
+  }
 };
+
 
 // Chart Kehadiran
 let chart;
