@@ -131,10 +131,16 @@ document.getElementById('addBtn').onclick = async () => {
     const jml = document.getElementById('addJml').value;
     if (!nama) return alert("Nama wajib diisi");
 
+    const parts = nama.split(" ");
+    const first = parts[0] || "";
+    const last = parts.slice(1).join(" ");
+
     const params = new URLSearchParams({
       action: 'add',
-      name: nama,         // beberapa backend expect 'name'
-      fullName: nama,     // beberapa expect 'fullName'
+      name: nama,
+      fullName: nama,
+      firstName: first,
+      lastName: last,
       hubungan: hub,
       kehadiran: stat,
       jumlah: jml
@@ -142,14 +148,12 @@ document.getElementById('addBtn').onclick = async () => {
 
     const res = await fetch(API, { method: "POST", body: params });
     let data = null;
-    try { data = await res.json(); } catch(e){ /* ignore JSON parse errors */ }
-
+    try { data = await res.json(); } catch(e){}
     if (res.ok && (data == null || data.status === 'success' || data.status === 'saved')) {
-      // sukses (jika backend tidak mengembalikan JSON juga kita anggap berhasil bila 200)
       alert('✅ Data berhasil ditambahkan');
       document.getElementById('addNama').value = "";
       document.getElementById('addJml').value = "";
-      await load(); // reload data
+      await load();
     } else {
       console.warn('add response', res, data);
       alert('❌ Gagal menambahkan data. Cek Console / Network.');
