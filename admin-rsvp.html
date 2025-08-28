@@ -1,143 +1,102 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>RSVP Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-  body{font-family:system-ui,sans-serif;background:#f6f7fb;margin:0;padding:24px}
-  h1{margin-bottom:8px}
-  .bar{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 18px}
-  input,select,button{padding:10px;border:1px solid #ddd;border-radius:8px}
-  button{cursor:pointer;font-weight:600}
-  button.primary{background:#2c3e50;color:#fff;border:0}
-  .card{background:#fff;border-radius:14px;box-shadow:0 4px 12px rgba(0,0,0,.08);padding:16px;margin-bottom:20px}
-  table{width:100%;border-collapse:collapse}
-  th,td{padding:8px 10px;border-bottom:1px solid #eee;font-size:14px;text-align:left}
-  th{background:#2c3e50;color:#fff;position:sticky;top:0}
-  tbody tr:hover{background:#f8f9fc}
-</style>
-<h1>RSVP Dashboard</h1>
+<head>
+  <meta charset="UTF-8">
+  <title>Admin RSVP Dashboard</title>
+  <style>
+    body {font-family: Arial, sans-serif; padding: 20px; background: #f4f6f9;}
+    h2 {color:#2c3e50;}
+    table {width:100%; border-collapse: collapse; margin-top: 20px;}
+    th, td {border:1px solid #ccc; padding:8px; text-align:left;}
+    th {background:#2c3e50; color:white;}
+    tr:nth-child(even){background:#f9f9f9;}
+    .form-row {margin-bottom:10px;}
+    input, select, button {padding:6px; margin-right:5px;}
+    button {cursor:pointer;}
+  </style>
+</head>
+<body>
+  <h2>Admin RSVP</h2>
 
-<div class="bar">
-  <input id="q" placeholder="Cari nama..."/>
-  <select id="filter">
-    <option value="">Semua status</option>
-    <option>Hadir</option>
-    <option>Tidak Hadir</option>
-    <option>-</option>
-  </select>
-  <button id="refresh" class="primary">Refresh</button>
-  <button id="export">Export CSV</button>
-  <input type="file" id="importFile"/>
-</div>
-
-<div class="card">
-  <h3>Tambah Data Baru</h3>
-  <div class="bar">
-    <input id="addNama" placeholder="Nama"/>
-    <select id="addHub">
-      <option>Teman</option>
-      <option>Saudara</option>
-      <option>Tamu</option>
-    </select>
-    <select id="addStat">
-      <option>-</option>
-      <option>Hadir</option>
-      <option>Tidak Hadir</option>
-    </select>
-    <input id="addJml" type="number" placeholder="Jumlah"/>
-    <button id="addBtn" class="primary">Tambah</button>
+  <!-- Form Tambah Data -->
+  <div>
+    <div class="form-row">
+      <input id="addNama" placeholder="Nama Lengkap" />
+      <select id="addHub">
+        <option value="Primary">Primary</option>
+        <option value="Guest">Guest</option>
+      </select>
+      <select id="addStat">
+        <option value="Hadir">Hadir</option>
+        <option value="Tidak Hadir">Tidak Hadir</option>
+      </select>
+      <input id="addJml" type="number" placeholder="Jumlah" min="1"/>
+      <button id="addBtn">Tambah</button>
+    </div>
   </div>
-</div>
 
-<div class="card">
-  <div id="count">Memuat data…</div>
-  <div style="overflow:auto;max-height:60vh">
-    <table id="tbl">
-      <thead><tr>
-        <th>Timestamp</th><th>Nama</th><th>Hubungan</th><th>Status</th><th>Jumlah</th>
-      </tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-</div>
-
-<div class="card">
-  <h3>Statistik Kehadiran</h3>
-  <canvas id="chartStatus" height="100"></canvas>
-</div>
+  <!-- Tabel Data RSVP -->
+  <table>
+    <thead>
+      <tr>
+        <th>Nama</th>
+        <th>Hubungan</th>
+        <th>Kehadiran</th>
+        <th>Jumlah</th>
+        <th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody id="dataBody"></tbody>
+  </table>
 
 <script>
-const API = "https://script.google.com/macros/s/AKfycbxMLG7Eihm81qig2_14MFhmYWe6KYH3hpoI8k-G3ejwc3FfCoJnrkgIbqYZGxi7Jow/exec"; 
-let raw = [];
+//=== Konfigurasi API Google Apps Script ===
+const API = "https://script.google.com/macros/s/AKfycbxMLG7Eihm81qig2_14MFhmYWe6KYH3hpoI8k-G3ejwc3FfCoJnrkgIbqYZGxi7Jow/exec";
 
+//=== Load Data dari Sheet ===
 async function load(){
-  document.getElementById('count').textContent = "Memuat data…";
-  const res = await fetch(API+"?action=list");
-  const json = await res.json();
-  raw = json.data || [];
-  render();
-}
-function render(){
-  const q = document.getElementById('q').value.toLowerCase();
-  const f = document.getElementById('filter').value;
-  const rows = raw.filter(r=>{
-    const nama = (r.fullName || (r.firstName+" "+r.lastName) || "").toLowerCase();
-    const okQ = !q || nama.includes(q);        <!-- ✅ Tambahan -->
-    const okF = !f || (r.kehadiran||'-')===f;
-    return okQ && okF;
-  });
-  document.getElementById('count').textContent = `Total: ${rows.length} data`;
-  document.querySelector('#tbl tbody').innerHTML = rows.map(r=>`
-    <tr>
-      <td>${r.timestamp||''}</td>
-      <td>${r.fullName || (r.firstName+" "+r.lastName)||''}</td>
-      <td>${r.hubungan||''}</td>
-      <td>${r.kehadiran||''}</td>
-      <td>${r.jumlah||''}</td>
-    </tr>`).join('');
-  drawChart(rows);
+  try {
+    const res = await fetch(API + "?action=list");
+    const data = await res.json();
+    const tbody = document.getElementById('dataBody');
+    tbody.innerHTML = "";
+    (data.data || []).forEach(row=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${row.fullName||''}</td>
+        <td>${row.hubungan||''}</td>
+        <td>${row.kehadiran||''}</td>
+        <td>${row.jumlah||''}</td>
+        <td>
+          <button onclick="editGuest('${row.fullName}')">Edit</button>
+          <button onclick="deleteGuest('${row.fullName}')">Delete</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch(err){
+    console.error("Load error:", err);
+    alert("Gagal memuat data");
+  }
 }
 
-// Export
-document.getElementById('export').onclick=()=>{
-  const rows=[['Timestamp','Nama','Hubungan','Status','Jumlah']]
-    .concat(raw.map(r=>[r.timestamp,r.fullName || (r.firstName+" "+r.lastName),r.hubungan,r.kehadiran,r.jumlah]));
-  const csv=rows.map(r=>r.map(x=>`"${(x??'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download='rsvp.csv';a.click();URL.revokeObjectURL(a.href);
-};
-
-// Import CSV
-document.getElementById('importFile').onchange=async e=>{
-  const file=e.target.files[0]; if(!file) return;
-  const text=await file.text();
-  await fetch(API,{
-    method:"POST",
-    body:new URLSearchParams({action:'import',csv:text})
-  });
-  load();
-};
-
-// Tambah Data
-// Tambah Data (perbaikan)
+//=== Tambah Data ===
 document.getElementById('addBtn').onclick = async () => {
   try {
     const nama = (document.getElementById('addNama').value || "").trim();
     const hub = document.getElementById('addHub').value;
     const stat = document.getElementById('addStat').value;
     const jml = document.getElementById('addJml').value;
+
     if (!nama) return alert("Nama wajib diisi");
 
+    // Pisahkan firstName dan lastName
     const parts = nama.split(" ");
     const first = parts[0] || "";
     const last = parts.slice(1).join(" ");
 
     const params = new URLSearchParams({
       action: 'add',
-      name: nama,
       fullName: nama,
       firstName: first,
       lastName: last,
@@ -149,41 +108,72 @@ document.getElementById('addBtn').onclick = async () => {
     const res = await fetch(API, { method: "POST", body: params });
     let data = null;
     try { data = await res.json(); } catch(e){}
-    if (res.ok && (data == null || data.status === 'success' || data.status === 'saved')) {
+
+    if (res.ok && data && data.status === 'success') {
       alert('✅ Data berhasil ditambahkan');
       document.getElementById('addNama').value = "";
       document.getElementById('addJml').value = "";
       await load();
     } else {
-      console.warn('add response', res, data);
-      alert('❌ Gagal menambahkan data. Cek Console / Network.');
+      console.warn("Add response:", data);
+      alert('❌ Gagal menambahkan data');
     }
   } catch (err) {
     console.error('addBtn error', err);
-    alert('❌ Error saat menambahkan: ' + err.message);
+    alert('❌ Error: ' + err.message);
   }
 };
 
+//=== Edit Data ===
+async function editGuest(nama){
+  const kehadiran = prompt("Masukkan status kehadiran (Hadir/Tidak Hadir):");
+  const jumlah = prompt("Masukkan jumlah tamu:");
 
-// Chart Kehadiran
-let chart;
-function drawChart(rows){
-  const counts={Hadir:0,"Tidak Hadir":0,"-":0};
-  rows.forEach(r=>counts[r.kehadiran||'-']++);
-  const ctx=document.getElementById('chartStatus').getContext('2d');
-  if(chart) chart.destroy();
-  chart=new Chart(ctx,{
-    type:'pie',
-    data:{
-      labels:Object.keys(counts),
-      datasets:[{data:Object.values(counts),backgroundColor:["#2ecc71","#e74c3c","#95a5a6"]}]
-    }
+  if(!kehadiran && !jumlah) return;
+
+  const params = new URLSearchParams({
+    action:'update',
+    name:nama,
+    kehadiran:kehadiran || "",
+    jumlah:jumlah || ""
   });
+
+  try{
+    const res = await fetch(API, { method:"POST", body: params });
+    const data = await res.json();
+    if(data.status === "updated" || data.status === "success"){
+      alert("✅ Data berhasil diupdate");
+      await load();
+    } else {
+      alert("❌ Gagal update");
+    }
+  }catch(err){
+    console.error("update error", err);
+    alert("❌ Error update: " + err.message);
+  }
 }
 
-document.getElementById('refresh').onclick=load;
-document.getElementById('q').oninput=render;
-document.getElementById('filter').onchange=render;
+//=== Hapus Data ===
+async function deleteGuest(nama){
+  if(!confirm("Yakin hapus " + nama + "?")) return;
+  const params = new URLSearchParams({ action:'delete', name:nama });
+  try{
+    const res = await fetch(API, { method:"POST", body: params });
+    const data = await res.json();
+    if(data.status === "deleted" || data.status === "success"){
+      alert("✅ Data dihapus");
+      await load();
+    } else {
+      alert("❌ Gagal hapus");
+    }
+  }catch(err){
+    console.error("delete error", err);
+    alert("❌ Error hapus: " + err.message);
+  }
+}
+
+//=== Load pertama kali ===
 load();
 </script>
+</body>
 </html>
